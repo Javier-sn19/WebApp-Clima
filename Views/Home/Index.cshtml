@@ -1,0 +1,194 @@
+﻿@model API.Models.WeatherHelper
+@{
+    ViewBag.Title = "Home Page";
+}
+
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Weather App</title>
+
+    <link rel="stylesheet" href="//netdna.bootstrapcdn.com/bootstrap/3.1.1/css/bootstrap.min.css">
+    <style type="text/css">
+        .field-validation-error {
+            color: #ff0000;
+        }
+
+        .weather-icon {
+            width: 40px;
+            height: 40px;
+        }
+
+        .accordion-group {
+            margin-bottom: 10px;
+        }
+
+        .accordion-heading {
+            background-color: #f5f5f5;
+            padding: 10px;
+            border-radius: 4px;
+            border: 1px solid #ddd;
+        }
+
+            .accordion-heading:hover {
+                cursor: pointer;
+            }
+
+            .accordion-heading h4 {
+                margin-top: 0;
+                margin-bottom: 0;
+                font-size: 16px;
+                font-weight: bold;
+            }
+
+        .accordion-body {
+            padding: 10px;
+            border-radius: 4px;
+            border: 1px solid #ddd;
+        }
+
+        .accordion-inner td {
+            padding: 5px;
+        }
+
+        body {
+            background-image: url('https://img.freepik.com/fotos-premium/cielo-azul-fondo-clima-nubes_261642-70.jpg');
+            background-size: cover;
+            background-repeat: no-repeat;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="col-md-6 col-md-offset-3">
+            <h1>Estado del clima</h1>
+            @using (@Html.BeginForm())
+            {
+                <div class="form-group">
+                    @Html.LabelFor(m => m.InputCity)
+                    @Html.TextBoxFor(model => model.InputCity, new { @class = "form-control" })
+                    @Html.ValidationMessageFor(model => model.InputCity)
+                </div>
+                <button type="button" class="btn btn-success submit">Buscar</button>
+            }
+            <br /><br />
+
+            <div class="alert alert-warning fade">
+                <strong><span class="alert-content"></span></strong>
+            </div>
+            <div id="accordion">
+            </div>
+        </div>
+    </div>
+    <script type="text/javascript">
+        $(document).ready(function () {
+            $("button").click(function () {
+                $.ajax({
+                    url: '@Url.RouteUrl(new{ action="GetWeatherForecast", controller="Home"})',
+                    data: JSON.stringify({ InputCity: $('#InputCity').val() }),
+                    type: 'POST',
+                    dataType: 'json',
+                    contentType: "application/json; charset=utf-8",
+                    success: function (resp) {
+                        openAlert(resp);
+                        fillingAccordion(resp);
+                    }
+                });
+            });
+        });
+
+        function openAlert(resp) {
+            $('.alert-content').text("El clima en " + resp.city.name + " es de, " + resp.city.country + " " + resp.list[0].main.temp + " °C");
+            $('.alert').addClass('in');
+        }
+
+        $('#InputCity').change(closeAlert);
+        $('#InputCity').keyup(closeAlert);
+
+        function closeAlert() {
+            $('.alert').removeClass('in');
+        }
+
+        function fillingAccordion(resp) {
+            $('#accordion').empty();
+            var groupedData = groupByDay(resp.list);
+            $.each(groupedData, function (index, group) {
+                var panel = $('<div class="panel panel-default">');
+                var heading = $('<div class="panel-heading">').appendTo(panel);
+                var title = $('<h4 class="panel-title">').appendTo(heading);
+                var link = $('<a data-toggle="collapse" data-parent="#accordion">').attr('href', '#collapse' + index).text(group.date).appendTo(title);
+                var body = $('<div id="collapse' + index + '" class="panel-collapse collapse">').appendTo(panel);
+                var inner = $('<div class="panel-body">').appendTo(body);
+                var table = $('<table class="table accordion-inner">').appendTo(inner);
+                var thead = $('<thead>').appendTo(table);
+                var tbody = $('<tbody>').appendTo(table);
+                var trHead = $('<tr>').appendTo(thead);
+                $('<th>Fecha</th>').appendTo(trHead);
+                $('<th>Hora</th>').appendTo(trHead);
+                $('<th>Temperatura</th>').appendTo(trHead);
+                $('<th></th>').appendTo(trHead);
+                $.each(group.data, function (i, item) {
+                    var time = new Date(item.dt * 1000);
+                    var formattedDate = ('0' + time.getDate()).slice(-2) + '/' + ('0' + (time.getMonth() + 1)).slice(-2) + '/' + ('' + time.getFullYear()).slice(-2);
+                    var formattedTime = ('0' + time.getHours()).slice(-2) + ':' + ('0' + time.getMinutes()).slice(-2);
+                    var tr = $('<tr>').appendTo(tbody);
+                    $('<td>').text(formattedDate).appendTo(tr);
+                    $('<td>').text(formattedTime).appendTo(tr);
+                    $('<td>').text(item.main.temp + " °C").appendTo(tr);
+                    var iconUrl = getWeatherIcon(item.weather[0].icon);
+                    var iconTd = $('<td>').appendTo(tr);
+                    $('<img>').attr('src', iconUrl).addClass('weather-icon').appendTo(iconTd);
+                });
+                panel.appendTo('#accordion');
+            });
+        }
+
+        function groupByDay(data) {
+            var groups = {};
+            data.forEach(function (item) {
+                var date = new Date(item.dt * 1000).toDateString();
+                if (!groups[date]) {
+                    groups[date] = [];
+                }
+                groups[date].push(item);
+            });
+            var result = [];
+            for (var date in groups) {
+                result.push({ date: date, data: groups[date] });
+            }
+            return result;
+        }
+
+        function getWeatherIcon(iconCode) {
+            var iconMap = {
+                '01d': 'http://openweathermap.org/img/wn/01d.png', // Clear sky (day)
+                '01n': 'http://openweathermap.org/img/wn/01n.png', // Clear sky (night)
+                '02d': 'http://openweathermap.org/img/wn/02d.png', // Few clouds (day)
+                '02n': 'http://openweathermap.org/img/wn/02n.png', // Few clouds (night)
+                '03d': 'http://openweathermap.org/img/wn/03d.png', // Scattered clouds (day)
+                '03n': 'http://openweathermap.org/img/wn/03n.png', // Scattered clouds (night)
+                '04d': 'http://openweathermap.org/img/wn/04d.png', // Broken clouds (day)
+                '04n': 'http://openweathermap.org/img/wn/04n.png', // Broken clouds (night)
+                '09d': 'http://openweathermap.org/img/wn/09d.png', // Shower rain (day)
+                '09n': 'http://openweathermap.org/img/wn/09n.png', // Shower rain (night)
+                '10d': 'http://openweathermap.org/img/wn/10d.png', // Rain (day)
+                '10n': 'http://openweathermap.org/img/wn/10n.png', // Rain (night)
+                '11d': 'http://openweathermap.org/img/wn/11d.png', // Thunderstorm (day)
+                '11n': 'http://openweathermap.org/img/wn/11n.png', // Thunderstorm (night)
+                '13d': 'http://openweathermap.org/img/wn/13d.png', // Snow (day)
+                '13n': 'http://openweathermap.org/img/wn/13n.png', // Snow (night)
+                '50d': 'http://openweathermap.org/img/wn/50d.png', // Mist (day)
+                '50n': 'http://openweathermap.org/img/wn/50n.png'  // Mist (night)
+            };
+
+            if (iconCode in iconMap) {
+                return iconMap[iconCode];
+            } else {
+                return 'http://openweathermap.org/img/wn/01d.png';
+            }
+        }
+    </script>
+</body>
+</html>
